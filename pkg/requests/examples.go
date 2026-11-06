@@ -24,8 +24,9 @@ type WebhookEndpointList struct {
 
 // WebhookEndpoint contains the data for each webhook endpoint
 type WebhookEndpoint struct {
-	URL           string   `json:"url"`
+	Application   string   `json:"application"`
 	EnabledEvents []string `json:"enabled_events"`
+	URL           string   `json:"url"`
 }
 
 // Examples stores possible webhook test events to trigger for the CLI
@@ -43,7 +44,7 @@ func (ex *Examples) buildRequest(method string, data []string) (*Base, *RequestP
 	}
 
 	base := &Base{
-		Profile:        ex.Profile,
+		Profile:        &ex.Profile,
 		Method:         method,
 		SuppressOutput: true,
 		APIBaseURL:     ex.APIBaseURL,
@@ -471,7 +472,7 @@ func (ex *Examples) WebhookEndpointsList() WebhookEndpointList {
 	}
 
 	base := &Base{
-		Profile:        ex.Profile,
+		Profile:        &ex.Profile,
 		Method:         http.MethodGet,
 		SuppressOutput: true,
 	}

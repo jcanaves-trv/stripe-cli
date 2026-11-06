@@ -13,7 +13,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/stripe/stripe-cli/pkg/ansi"
-	"github.com/stripe/stripe-cli/pkg/endpoint"
 	"github.com/stripe/stripe-cli/pkg/stripeauth"
 	"github.com/stripe/stripe-cli/pkg/websocket"
 )
@@ -22,7 +21,19 @@ import (
 // Public types
 //
 
-// Config provides the cfguration of a Proxy
+// EndpointRoute describes a local endpoint's routing configuration.
+type EndpointRoute struct {
+	// URL is the endpoint's URL.
+	URL string
+
+	// Connect indicates whether the endpoint should receive normal (when false) or Connect (when true) events.
+	Connect bool
+
+	// EventTypes is the list of event types that should be sent to the endpoint.
+	EventTypes []string
+}
+
+// Config provides the configuration of a Proxy
 type Config struct {
 	// DeviceName is the name of the device sent to Stripe to help identify the device
 	DeviceName string
@@ -31,7 +42,7 @@ type Config struct {
 	Key string
 
 	// EndpointsMap is a mapping of local webhook endpoint urls to the events they consume
-	EndpointsMap map[string][]string
+	EndpointRoutes []EndpointRoute
 
 	APIBaseURL string
 
@@ -56,7 +67,7 @@ type Config struct {
 type Proxy struct {
 	cfg *Config
 
-	endpointClients  []*endpoint.Client
+	endpointClients  []*EndpointClient
 	stripeAuthClient *stripeauth.Client
 	webSocketClient  *websocket.Client
 
@@ -170,7 +181,7 @@ func (p *Proxy) processWebhookEvent(msg websocket.IncomingMessage) {
 	}
 
 	for _, endpoint := range p.endpointClients {
-		if endpoint.SupportsEventType(evt.Type) {
+		if endpoint.SupportsEventType(evt.isConnect(), evt.Type) {
 			go endpoint.Post(webhookEvent.WebhookID, webhookEvent.EventPayload, webhookEvent.HTTPHeaders)
 		}
 	}
@@ -224,14 +235,15 @@ func New(cfg *Config) *Proxy {
 		interruptCh: make(chan os.Signal, 1),
 	}
 
-	for url, events := range cfg.EndpointsMap {
+	for _, route := range cfg.EndpointRoutes {
 		// append to endpointClients
-		p.endpointClients = append(p.endpointClients, endpoint.NewClient(
-			url,
-			events,
-			&endpoint.Config{
+		p.endpointClients = append(p.endpointClients, NewEndpointClient(
+			route.URL,
+			route.Connect,
+			route.EventTypes,
+			&EndpointConfig{
 				Log:             p.cfg.Log,
-				ResponseHandler: endpoint.ResponseHandlerFunc(p.processEndpointResponse),
+				ResponseHandler: EndpointResponseHandlerFunc(p.processEndpointResponse),
 			},
 		))
 	}
